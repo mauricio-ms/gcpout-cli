@@ -4,6 +4,8 @@ import (
        "regexp"
        "encoding/json"
        "fmt"
+       "strings"
+       "sort"
 )
 
 type RepositoryClone struct {
@@ -26,9 +28,38 @@ func (rc RepositoryClone) RepoOwner() string {
      return ownerRegex.FindStringSubmatch(originUrl)[1]
 }
 
+func (rc RepositoryClone) Branches() []string {
+     branchesMap := map[string]struct{}{}
+
+     for _, branch := range rc.LocalBranches() {
+     	 branchesMap[branch] = struct{}{}
+     }
+     for _, branch := range rc.RemoteBranches() {
+     	 branchesMap[branch] = struct{}{}
+     }
+
+     branches := make([]string, 0, len(branchesMap))
+     for branch := range branchesMap {
+     	 branches = append(branches, branch)
+     }
+
+     sort.Strings(branches)
+
+     return branches
+}
+
 func (rc RepositoryClone) LocalBranches() []string {
-     // TODO implement it
-     return make([]string, 0)
+     listBranches := runCommand("git", "-C", rc.Path(), "branch", "--list")
+     var localBranches []string
+     localBranches = strings.Split(listBranches, "\n")
+
+     for i, branch := range localBranches {
+     	 branch = strings.TrimSpace(branch)
+	 branch = strings.TrimPrefix(branch, "* ")
+     	 localBranches[i] = branch
+     }
+     
+     return localBranches
 }
 
 func (rc RepositoryClone) RemoteBranches() []string {

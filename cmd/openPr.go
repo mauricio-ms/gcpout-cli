@@ -46,13 +46,14 @@ to quickly create a Cobra application.`,
 	      var qs = []*survey.Question{
 		  {
 			Name:		"sourceBranch",
-			Prompt:		&survey.Input{
+			Prompt:		&survey.Select{
 						Message: "Source Branch:",
+						Options: repositoryClone.Branches(),
 						Default: repositoryClone.CurrentBranch(),
 					},
 			Validate:	survey.Required,
-			// TODO add options listing all branches for the project
 			// TODO add validation: should be a valid remote branch
+			// TODO check response and ask if user to push the branch in case he wants to proceed
 		  },
 		  {
 			Name:		"targetBranch",
@@ -82,6 +83,8 @@ to quickly create a Cobra application.`,
 	      	      Title		string
 		      Description	string
 	      }{}
+
+	      repositoryClone.LocalBranches()
 
 	      err := survey.Ask(qs, &answers)
 	      if err != nil {
