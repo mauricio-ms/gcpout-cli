@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
-	"regexp"
 	"encoding/json"
 )
 
@@ -32,20 +31,24 @@ to quickly create a Cobra application.`,
 	      projectsPath := projectsPath()
 	      projects := projects(projectsPath + "*")
 
-	      // TODO make questions to generate the command hard-coded below
+	      var project string
+	      survey.AskOne(
+		&survey.Select{
+			Message: "Project:",
+			Options: projects,
+		}, &project, survey.WithValidator(survey.Required))
+
+	      repositoryClone := RepositoryClone {
+	      		      ParentPath: projectsPath,
+			      Name: project,
+	      }
+
 	      var qs = []*survey.Question{
-		  {
-			Name:		"project",
-			Prompt:		&survey.Select{
-						Message: "Project:",
-						Options: projects,
-					},
-		  },
 		  {
 			Name:		"sourceBranch",
 			Prompt:		&survey.Input{
 						Message: "Source Branch:",
-						Default: currentBranch(),
+						Default: repositoryClone.CurrentBranch(),
 					},
 			Validate:	survey.Required,
 			// TODO add options listing all branches for the project
@@ -57,7 +60,7 @@ to quickly create a Cobra application.`,
 						Message: "Target Branch:",
 					},
 			Validate:	survey.Required,
-			// TODO add options listing all branches for the project but the choosed source branch
+			// TODO add options listing all branches (using LocalBranches + RemoteBranches methods) for the project but the choosed source branch
 			// TODO add validation: should be a valid remote branch
 		  },
 	      	  {
@@ -86,7 +89,11 @@ to quickly create a Cobra application.`,
 		 return
 	      }
 
-	      endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repoOwner(), answers.Project)
+	      fmt.Println(repositoryClone.RepoOwner())
+
+	      return
+
+	      endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repositoryClone.RepoOwner(), answers.Project)
 
 	      openPrCommand := runCommand("gh", "api",
 	      		    "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,
@@ -113,23 +120,12 @@ func projects(projectsPath string) []string {
 func projectsPath() string {
      var inner func(relativePath string) string
      inner = func (relativePath string) string {
-     	    	  if _, err := os.Stat(relativePath + ".git"); err == nil {
+     	     	  if _, err := os.Stat(relativePath + ".git"); err == nil {
      	       	     return inner(relativePath + "../")
-     	    	  }
-     	    	  return runCommand("readlink", "-f", relativePath)
+     	     	  }
+     	     	  return runCommand("readlink", "-f", relativePath)
      	     }
      return inner("") + "/"
-}
-
-func currentBranch() string {
-     return runCommand("git", "rev-parse", "--abbrev-ref", "HEAD")
-}
-
-func repoOwner() string {
-     originUrl := runCommand("git", "remote", "get-url", "origin")
-     ownerRegex := regexp.MustCompile(`^[^:]+:([^/]+).*$`)
-     
-     return ownerRegex.FindStringSubmatch(originUrl)[1]
 }
 
 // TODO add behavior to suppress errors only when needed
