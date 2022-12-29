@@ -73,6 +73,8 @@ to quickly create a Cobra application.`,
 	      targetBranches = append(targetBranches, remoteBranches[:sourceBranchIndex]...)
 	      targetBranches = append(targetBranches, remoteBranches[sourceBranchIndex+1:]...)
 
+	      pullRequestTemplate := NewPullRequestTemplate()
+
 	      var qs = []*survey.Question{
 		  {
 			Name:		"targetBranch",
@@ -82,9 +84,12 @@ to quickly create a Cobra application.`,
 					},
 		  },
 	      	  {
-			Name:		"title",
-			Prompt:		&survey.Input{Message: "PR Title:"},
-			Validate: 	survey.Required,
+			Name:		"jiraIssueId",
+			Prompt:		&survey.Input{
+						Message: "Jira Issue Id:",
+						Help: "For a project ST and issue 123, type ST-123",
+					},
+			Validate: 	survey.Required, // TODO add validation for checking if the input follows the pattern PROJECT-ID
 		  },
 		  {
 			Name:		"description",
@@ -98,30 +103,21 @@ to quickly create a Cobra application.`,
 			Name:		"typeOfChange",
 			Prompt:		&survey.Select{
 						Message: "Type of change:",
-						Options: []string{
-							 "Chore (no production code changed. eg: doc, style, tests)Chore (no production code changed. eg: doc, style, tests)",
-							 "Bug fix (non-breaking change which fixes an issue)",
-							 "New feature (non-breaking change which adds functionality)",
-							 "Breaking change (fix or feature that would cause existing functionality to not work as expected)",
-						},
+						Options: pullRequestTemplate.TypeOfChanges,
 					},
 		  },
 		  {
 			Name:		"checklist",
 			Prompt:		&survey.MultiSelect{
 						Message: "Checklist:",
-						Options: []string{
-							 "I have commented on my code, particularly in hard-to-understand areas",
-							 "I have made corresponding changes to the documentation",
-							 "The required manual tests were executed and no issue was found",
-						},
+						Options: pullRequestTemplate.ChecklistQuestions,
 					},
 		  },
 	      }
 
 	      answers := struct {
 		      TargetBranch	string
-	      	      Title		string
+	      	      JiraIssueId	string
 		      Description	string
 		      TypeOfChange	int
 		      Checklist		[]core.OptionAnswer
@@ -133,7 +129,16 @@ to quickly create a Cobra application.`,
 		 return
 	      }
 
-	      fmt.Println(answers)
+	      pullRequestTemplate.Description = answers.Description
+	      pullRequestTemplate.TypeOfChange = answers.TypeOfChange
+	      pullRequestTemplate.Checklist = make([]int, len(answers.Checklist))
+	      for i, checklistAnswer := range answers.Checklist {
+	      	  pullRequestTemplate.Checklist[i] = checklistAnswer.Index
+	      }
+
+	      fmt.Println(pullRequestTemplate.Generate())
+	      jira := NewJira()
+	      fmt.Println(jira.LinkForIssue(answers.JiraIssueId)) // TODO use it in checklist generation
 
 	      return
 
@@ -141,8 +146,8 @@ to quickly create a Cobra application.`,
 
 	      openPrCommand := runCommand("gh", "api",
 	      		    "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,
-			    "-f", fmt.Sprintf("title=%s", answers.Title),
-			    "-f", fmt.Sprintf("body=%s", answers.Description),
+			    "-f", fmt.Sprintf("title=%s", answers.JiraIssueId),
+			    "-f", fmt.Sprintf("body=%s", pullRequestTemplate.Generate()),
 			    "-f", fmt.Sprintf("head=%s", sourceBranch),
 			    "-f", fmt.Sprintf("base=%s", answers.TargetBranch))
 	      var pr map[string]string
@@ -160,7 +165,6 @@ func RemoteBranchValidator(rc RepositoryClone) survey.Validator {
      	    if answer, ok := val.(core.OptionAnswer) ; !ok || !rc.HasRemoteBranch(answer.Value) {
 	       return fmt.Errorf("%s is only local", answer.Value)
 	    }
-	    fmt.Println("Ok")
 	    return nil
      }
 }
