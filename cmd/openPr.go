@@ -7,6 +7,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"github.com/fatih/color"
 	"strings"
 	"path/filepath"
 	"github.com/AlecAivazis/survey/v2"
@@ -43,18 +44,22 @@ to quickly create a Cobra application.`,
 			      Name: project,
 	      }
 
+	      var sourceBranch string
+	      survey.AskOne(
+		&survey.Select{
+			Message: "Source Branch:",
+			Options: repositoryClone.Branches(),
+			Default: repositoryClone.CurrentBranch(),
+		}, &sourceBranch, survey.WithValidator(survey.Required))
+
+	      if (!repositoryClone.HasRemoteBranch(sourceBranch)) {
+		 // TODO add code to ask if user can push his local branch
+		 // example: survey.AskOne(&survey.Confirm{Message: ""})
+		 Errorf("X The branch %s is only local, please check if everithing is commited and push it before opening the PRs\n", sourceBranch)
+		 return
+	      }
+
 	      var qs = []*survey.Question{
-		  {
-			Name:		"sourceBranch",
-			Prompt:		&survey.Select{
-						Message: "Source Branch:",
-						Options: repositoryClone.Branches(),
-						Default: repositoryClone.CurrentBranch(),
-					},
-			Validate:	survey.Required,
-			// TODO add validation: should be a valid remote branch
-			// TODO check response and ask if user to push the branch in case he wants to proceed
-		  },
 		  {
 			Name:		"targetBranch",
 			Prompt:		&survey.Input{
@@ -77,14 +82,10 @@ to quickly create a Cobra application.`,
 	      }
 
 	      answers := struct {
-	      	      Project		string
-		      SourceBranch	string
 		      TargetBranch	string
 	      	      Title		string
 		      Description	string
 	      }{}
-
-	      repositoryClone.LocalBranches()
 
 	      err := survey.Ask(qs, &answers)
 	      if err != nil {
@@ -96,19 +97,34 @@ to quickly create a Cobra application.`,
 
 	      return
 
-	      endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repositoryClone.RepoOwner(), answers.Project)
+	      endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repositoryClone.RepoOwner(), project)
 
 	      openPrCommand := runCommand("gh", "api",
 	      		    "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,
 			    "-f", fmt.Sprintf("title=%s", answers.Title),
 			    "-f", fmt.Sprintf("body=%s", answers.Description),
-			    "-f", fmt.Sprintf("head=%s", answers.SourceBranch),
+			    "-f", fmt.Sprintf("head=%s", sourceBranch),
 			    "-f", fmt.Sprintf("base=%s", answers.TargetBranch))
 	      var pr map[string]string
 	      json.Unmarshal([]byte(openPrCommand), &pr)
 	      fmt.Println("PR opened: " + pr["html_url"])
 	},
 }
+
+func Errorf(message string, args ...string) {
+     color.New(color.FgRed).Printf(message, args)
+}
+
+/**
+func RemoteBranchValidator(RepositoryClone rc) error {
+     return func (val interface{}) error {
+     	    if str, ok := val.(string) ; !rc.hasRemoteBranch(str) {
+	       return errors.New("The bra")
+	    }
+	    return nil
+     }
+}
+*/
 
 func projects(projectsPath string) []string {
      var projectsPaths, _ = filepath.Glob(projectsPath)

@@ -62,6 +62,15 @@ func (rc RepositoryClone) LocalBranches() []string {
      return localBranches
 }
 
+func (rc RepositoryClone) HasRemoteBranch(branch string) bool {
+     remoteBranches := rc.RemoteBranches()
+     _, found := sort.Find(len(remoteBranches), func(i int) int {
+     	return strings.Compare(branch, remoteBranches[i])
+     })
+
+     return found
+}
+
 func (rc RepositoryClone) RemoteBranches() []string {
      endpoint := rc.ApiResourcePrefix() + "/branches"
      response := runCommand("gh", "api", "-H", "Accept:application/vnd.github+json", endpoint)
