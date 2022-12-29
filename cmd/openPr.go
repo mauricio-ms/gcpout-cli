@@ -88,8 +88,34 @@ to quickly create a Cobra application.`,
 		  },
 		  {
 			Name:		"description",
-			Prompt:		&survey.Input{Message: "PR Description:"},
+			Prompt:		&survey.Input{
+						Message: "Description:",
+						Help: "Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context. List any dependencies that are required for this change.",
+					},
 			Validate: 	survey.Required,
+		  },
+		  {
+			Name:		"typeOfChange",
+			Prompt:		&survey.Select{
+						Message: "Type of change:",
+						Options: []string{
+							 "Chore (no production code changed. eg: doc, style, tests)Chore (no production code changed. eg: doc, style, tests)",
+							 "Bug fix (non-breaking change which fixes an issue)",
+							 "New feature (non-breaking change which adds functionality)",
+							 "Breaking change (fix or feature that would cause existing functionality to not work as expected)",
+						},
+					},
+		  },
+		  {
+			Name:		"checklist",
+			Prompt:		&survey.MultiSelect{
+						Message: "Checklist:",
+						Options: []string{
+							 "I have commented on my code, particularly in hard-to-understand areas",
+							 "I have made corresponding changes to the documentation",
+							 "The required manual tests were executed and no issue was found",
+						},
+					},
 		  },
 	      }
 
@@ -97,6 +123,8 @@ to quickly create a Cobra application.`,
 		      TargetBranch	string
 	      	      Title		string
 		      Description	string
+		      TypeOfChange	int
+		      Checklist		[]core.OptionAnswer
 	      }{}
 
 	      err := survey.Ask(qs, &answers)
@@ -105,7 +133,7 @@ to quickly create a Cobra application.`,
 		 return
 	      }
 
-	      fmt.Println(repositoryClone.RepoOwner())
+	      fmt.Println(answers)
 
 	      return
 
