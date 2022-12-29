@@ -13,6 +13,8 @@ type RepositoryClone struct {
      Name	       string
 }
 
+// TODO Create New method to precompute the methods into fields
+
 func (rc RepositoryClone) Path() string {
      return rc.ParentPath + "/" + rc.Name
 }
@@ -83,7 +85,7 @@ func (rc RepositoryClone) RemoteBranches() []string {
      for i, branch := range branches {
      	 branchesNames[i] = branch["name"]
      }
-     
+
      return branchesNames
 }
 

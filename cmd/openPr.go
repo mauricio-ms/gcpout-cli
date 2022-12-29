@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"log"
 	"github.com/fatih/color"
+	"sort"
 	"strings"
 	"path/filepath"
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
@@ -50,24 +52,34 @@ to quickly create a Cobra application.`,
 			Message: "Source Branch:",
 			Options: repositoryClone.Branches(),
 			Default: repositoryClone.CurrentBranch(),
-		}, &sourceBranch, survey.WithValidator(survey.Required))
+		}, &sourceBranch, survey.WithValidator(RemoteBranchValidator(repositoryClone)))
 
+	      /**
+	      TODO use it when new questions is used to push the branch to user
 	      if (!repositoryClone.HasRemoteBranch(sourceBranch)) {
 		 // TODO add code to ask if user can push his local branch
 		 // example: survey.AskOne(&survey.Confirm{Message: ""})
 		 Errorf("X The branch %s is only local, please check if everithing is commited and push it before opening the PRs\n", sourceBranch)
 		 return
 	      }
+	      **/
+
+	      // TODO create new struct
+	      remoteBranches := repositoryClone.RemoteBranches()
+	      sourceBranchIndex, _ := sort.Find(len(remoteBranches), func(i int) int {
+	      			 return strings.Compare(sourceBranch, remoteBranches[i])
+	      })
+	      targetBranches := make([]string, 0)
+	      targetBranches = append(targetBranches, remoteBranches[:sourceBranchIndex]...)
+	      targetBranches = append(targetBranches, remoteBranches[sourceBranchIndex+1:]...)
 
 	      var qs = []*survey.Question{
 		  {
 			Name:		"targetBranch",
-			Prompt:		&survey.Input{
+			Prompt:		&survey.Select{
 						Message: "Target Branch:",
+						Options: targetBranches,
 					},
-			Validate:	survey.Required,
-			// TODO add options listing all branches (using LocalBranches + RemoteBranches methods) for the project but the choosed source branch
-			// TODO add validation: should be a valid remote branch
 		  },
 	      	  {
 			Name:		"title",
@@ -115,16 +127,15 @@ func Errorf(message string, args ...string) {
      color.New(color.FgRed).Printf(message, args)
 }
 
-/**
-func RemoteBranchValidator(RepositoryClone rc) error {
+func RemoteBranchValidator(rc RepositoryClone) survey.Validator {
      return func (val interface{}) error {
-     	    if str, ok := val.(string) ; !rc.hasRemoteBranch(str) {
-	       return errors.New("The bra")
+     	    if answer, ok := val.(core.OptionAnswer) ; !ok || !rc.HasRemoteBranch(answer.Value) {
+	       return fmt.Errorf("%s is only local", answer.Value)
 	    }
+	    fmt.Println("Ok")
 	    return nil
      }
 }
-*/
 
 func projects(projectsPath string) []string {
      var projectsPaths, _ = filepath.Glob(projectsPath)
