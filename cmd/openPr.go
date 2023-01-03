@@ -87,9 +87,9 @@ to quickly create a Cobra application.`,
 			Name:		"jiraIssueId",
 			Prompt:		&survey.Input{
 						Message: "Jira Issue Id:",
-						Help: "For a project ST and issue 123, type ST-123",
+						Help: "For a project ST and an issue 123, type ST-123",
 					},
-			Validate: 	survey.Required, // TODO add validation for checking if the input follows the pattern PROJECT-ID
+			Validate: 	JiraIssueValidator(), // TODO add validation for checking if the input follows the pattern PROJECT-ID
 		  },
 		  {
 			Name:		"description",
@@ -166,6 +166,15 @@ func RemoteBranchValidator(rc RepositoryClone) survey.Validator {
 	       return fmt.Errorf("%s is only local", answer.Value)
 	    }
 	    return nil
+     }
+}
+
+func JiraIssueValidator() survey.Validator {
+     return func (val interface{}) error {
+     	    if value, ok := val.(string) ; !ok || !ValidJiraIssue(value) {
+	       return fmt.Errorf("%s doesn't follow the Jira Issue pattern <PROJECT_ID-ISSUE_ID>", value)
+	    } 
+     	    return nil
      }
 }
 

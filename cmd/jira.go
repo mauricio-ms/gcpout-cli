@@ -2,6 +2,7 @@ package cmd
 
 import (
        "fmt"
+       "regexp"
 )
 
 // TODO read values from a file like /home/user/.config/.gcpout/.config.properties
@@ -19,4 +20,13 @@ func NewJira() Jira {
 
 func (this Jira) LinkForIssue(issueId string) string {
      return fmt.Sprintf("%s/browse/%s", this.server, issueId)
+}
+
+func ValidJiraIssue(issueId string) bool {
+     match, err := regexp.MatchString(`^\w+-\d+$`, issueId)
+     if err != nil {
+     	return false
+     } else {
+        return match
+     }
 }
