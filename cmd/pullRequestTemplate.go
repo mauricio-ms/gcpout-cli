@@ -6,6 +6,8 @@ import (
 )
 
 type PullRequestTemplate struct {
+     IssueLink		 string
+
      TypeOfChanges	 []string
      ChecklistQuestions	 []string
 
@@ -14,8 +16,9 @@ type PullRequestTemplate struct {
      Checklist		 []int
 }
 
-func NewPullRequestTemplate() PullRequestTemplate {
+func NewPullRequestTemplate(issueLink string) PullRequestTemplate {
      return PullRequestTemplate {
+     	    IssueLink: issueLink,
      	    TypeOfChanges: []string{
 				"Chore (no production code changed. eg: doc, style, tests)Chore (no production code changed. eg: doc, style, tests)",
 				"Bug fix (non-breaking change which fixes an issue)",
@@ -40,21 +43,50 @@ func (this PullRequestTemplate) Generate() string {
      sb.WriteString("\n\n")
 
      sb.WriteString("## Type of change\n\n")
-     sb.WriteString("[x] - ")
-     sb.WriteString(this.TypeOfChanges[this.TypeOfChange])
+     sb.WriteString(CheckedItem(this.TypeOfChanges[this.TypeOfChange]))
+     sb.WriteString("\n\n")
+
+     sb.WriteString(this.TaskHeader())
+     sb.WriteString("\n\n")
+     sb.WriteString("- ")
+     sb.WriteString(this.IssueLink)
      sb.WriteString("\n\n")
 
      sb.WriteString("## Checklist:\n")
      for i, checklistQuestion := range this.ChecklistQuestions {
-     	 if (this.HasCheckedQuestion(i)) {
-	    sb.WriteString("\n[x] - ")
-	 } else {
-	    sb.WriteString("\n[ ] - ")
-	 }
-	 sb.WriteString(checklistQuestion)
+     	 sb.WriteString("\n")
+	 sb.WriteString(Item(this.HasCheckedQuestion(i), checklistQuestion))
      }
 
      return sb.String()
+}
+
+func (this PullRequestTemplate) TaskHeader() string {
+     if this.IsNewFeature() {
+     	return "### Features"
+     } else {
+        return "### Fixes"
+     }
+}
+
+func (this PullRequestTemplate) IsNewFeature() bool {
+     return this.TypeOfChange == 2
+}
+
+func Item(checked bool, item string) string {
+     if checked {
+     	return CheckedItem(item)
+     } else {
+        return UncheckedItem(item)
+     }
+}
+
+func CheckedItem(item string) string {
+     return "[x] - " + item
+}
+
+func UncheckedItem(item string) string {
+     return "[ ] - " + item
 }
 
 func (this PullRequestTemplate) HasCheckedQuestion(questionIndex int) bool {

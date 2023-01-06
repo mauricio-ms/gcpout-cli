@@ -31,6 +31,12 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
    	//Args: cobra.MinimumNArgs(1),
    	Run: func(cmd *cobra.Command, args []string) {
+	      configFile, err := ReadConfigFile()
+	      if err != nil {
+	      	 Error("X Run the init command to configure the CLI\n")
+		 return
+	      }
+
 	      projectsPath := projectsPath()
 	      projects := projects(projectsPath + "*")
 
@@ -73,24 +79,25 @@ to quickly create a Cobra application.`,
 	      targetBranches = append(targetBranches, remoteBranches[:sourceBranchIndex]...)
 	      targetBranches = append(targetBranches, remoteBranches[sourceBranchIndex+1:]...)
 
-	      pullRequestTemplate := NewPullRequestTemplate()
+	      var targetBranch string
+	      survey.AskOne(
+		&survey.Select{
+			Message: "Target Branch:",
+			Options: targetBranches,
+		}, &targetBranch)
+
+
+	      var jiraIssueId string
+	      survey.AskOne(
+		&survey.Input{
+			Message: "Jira Issue Id:",
+			Help: "For a project ST and an issue 123, type ST-123",
+		}, &jiraIssueId, survey.WithValidator(JiraIssueValidator()))
+
+	      jira := NewJira(configFile.jiraServer)
+	      pullRequestTemplate := NewPullRequestTemplate(jira.LinkForIssue(jiraIssueId))
 
 	      var qs = []*survey.Question{
-		  {
-			Name:		"targetBranch",
-			Prompt:		&survey.Select{
-						Message: "Target Branch:",
-						Options: targetBranches,
-					},
-		  },
-	      	  {
-			Name:		"jiraIssueId",
-			Prompt:		&survey.Input{
-						Message: "Jira Issue Id:",
-						Help: "For a project ST and an issue 123, type ST-123",
-					},
-			Validate: 	JiraIssueValidator(), // TODO add validation for checking if the input follows the pattern PROJECT-ID
-		  },
 		  {
 			Name:		"description",
 			Prompt:		&survey.Input{
@@ -116,14 +123,12 @@ to quickly create a Cobra application.`,
 	      }
 
 	      answers := struct {
-		      TargetBranch	string
-	      	      JiraIssueId	string
 		      Description	string
 		      TypeOfChange	int
 		      Checklist		[]core.OptionAnswer
 	      }{}
 
-	      err := survey.Ask(qs, &answers)
+	      err = survey.Ask(qs, &answers)
 	      if err != nil {
 	      	 log.Fatal(err.Error())
 		 return
@@ -136,28 +141,30 @@ to quickly create a Cobra application.`,
 	      	  pullRequestTemplate.Checklist[i] = checklistAnswer.Index
 	      }
 
-	      fmt.Println(pullRequestTemplate.Generate())
-	      jira := NewJira()
-	      fmt.Println(jira.LinkForIssue(answers.JiraIssueId)) // TODO use it in checklist generation
-
-	      return
-
 	      endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repositoryClone.RepoOwner(), project)
-
+	      
 	      openPrCommand := runCommand("gh", "api",
 	      		    "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,
-			    "-f", fmt.Sprintf("title=%s", answers.JiraIssueId),
+			    "-f", fmt.Sprintf("title=%s", jiraIssueId),
 			    "-f", fmt.Sprintf("body=%s", pullRequestTemplate.Generate()),
 			    "-f", fmt.Sprintf("head=%s", sourceBranch),
-			    "-f", fmt.Sprintf("base=%s", answers.TargetBranch))
+			    "-f", fmt.Sprintf("base=%s", targetBranch))
 	      var pr map[string]string
 	      json.Unmarshal([]byte(openPrCommand), &pr)
-	      fmt.Println("PR opened: " + pr["html_url"])
+	      Successf("PR opened: %s\n", pr["html_url"])
 	},
 }
 
-func Errorf(message string, args ...string) {
-     color.New(color.FgRed).Printf(message, args)
+func Successf(message string, args ...any) {
+     color.New(color.FgGreen).Printf(message, args...)
+}
+
+func Error(message string) {
+     color.New(color.FgRed).Print(message)
+}
+
+func Errorf(message string, args ...any) {
+     color.New(color.FgRed).Printf(message, args...)
 }
 
 func RemoteBranchValidator(rc RepositoryClone) survey.Validator {
