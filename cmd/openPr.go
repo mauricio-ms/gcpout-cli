@@ -51,7 +51,7 @@ to quickly create a Cobra application.`,
 	      		      ParentPath: projectsPath,
 			      Name: project,
 	      }
-
+	      
 	      var sourceBranch string
 	      survey.AskOne(
 		&survey.Select{

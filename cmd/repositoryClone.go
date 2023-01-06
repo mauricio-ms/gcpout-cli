@@ -66,6 +66,8 @@ func (rc RepositoryClone) LocalBranches() []string {
 
 func (rc RepositoryClone) HasRemoteBranch(branch string) bool {
      remoteBranches := rc.RemoteBranches()
+     sort.Strings(remoteBranches)
+
      _, found := sort.Find(len(remoteBranches), func(i int) int {
      	return strings.Compare(branch, remoteBranches[i])
      })

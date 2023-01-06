@@ -48,14 +48,13 @@ func (this PullRequestTemplate) Generate() string {
 
      sb.WriteString(this.TaskHeader())
      sb.WriteString("\n\n")
-     sb.WriteString("- ")
-     sb.WriteString(this.IssueLink)
+     sb.WriteString(Item(this.IssueLink))
      sb.WriteString("\n\n")
 
      sb.WriteString("## Checklist:\n")
      for i, checklistQuestion := range this.ChecklistQuestions {
      	 sb.WriteString("\n")
-	 sb.WriteString(Item(this.HasCheckedQuestion(i), checklistQuestion))
+	 sb.WriteString(SelectItem(this.HasCheckedQuestion(i), checklistQuestion))
      }
 
      return sb.String()
@@ -73,7 +72,7 @@ func (this PullRequestTemplate) IsNewFeature() bool {
      return this.TypeOfChange == 2
 }
 
-func Item(checked bool, item string) string {
+func SelectItem(checked bool, item string) string {
      if checked {
      	return CheckedItem(item)
      } else {
@@ -82,11 +81,15 @@ func Item(checked bool, item string) string {
 }
 
 func CheckedItem(item string) string {
-     return "[x] - " + item
+     return Item("[x] " + item)
 }
 
 func UncheckedItem(item string) string {
-     return "[ ] - " + item
+     return Item("[ ] " + item)
+}
+
+func Item(value string) string {
+      return "- " + value
 }
 
 func (this PullRequestTemplate) HasCheckedQuestion(questionIndex int) bool {
