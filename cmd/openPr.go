@@ -23,12 +23,12 @@ import (
 var openPrCmd = &cobra.Command{
 	Use:   "openPr",
 	Short: "Open a Pull Request",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Long: `Command to open a Pull Request.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+This command will generate a description for your PullRequest based on your answers containing:
+- A description;
+- The Link for the Jira Issue;
+- A checklist.`,
    	//Args: cobra.MinimumNArgs(1),
    	Run: func(cmd *cobra.Command, args []string) {
 	      configFile, err := ReadConfigFile()
