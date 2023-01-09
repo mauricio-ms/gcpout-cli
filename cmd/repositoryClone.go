@@ -6,6 +6,7 @@ import (
        "fmt"
        "strings"
        "sort"
+       "errors"
 )
 
 type RepositoryClone struct {
@@ -19,24 +20,36 @@ func (rc RepositoryClone) Path() string {
      return rc.ParentPath + "/" + rc.Name
 }
 
-func (rc RepositoryClone) CurrentBranch() string {
-     return runCommand("git", "-C", rc.Path(), "branch", "--show-current")
+func (rc RepositoryClone) CurrentBranch() (string, error) {
+     return RunCommand("git", "-C", rc.Path(), "branch", "--show-current")
 }
 
-func (rc RepositoryClone) RepoOwner() string {
-     originUrl := runCommand("git", "-C", rc.Path(), "remote", "get-url", "origin")
-     ownerRegex := regexp.MustCompile(`^[^:]+:([^/]+).*$`)
+func (rc RepositoryClone) RepoOwner() (string, error) {
+     originUrl, err := RunCommand("git", "-C", rc.Path(), "remote", "get-url", "origin")
+     if err != nil {
+     	return "", err
+     }
      
-     return ownerRegex.FindStringSubmatch(originUrl)[1]
+     ownerRegex := regexp.MustCompile(`^[^:]+:([^/]+).*$`)
+     return ownerRegex.FindStringSubmatch(originUrl)[1], nil
 }
 
-func (rc RepositoryClone) Branches() []string {
+func (rc RepositoryClone) Branches() ([]string, error) {
      branchesMap := map[string]struct{}{}
-
-     for _, branch := range rc.LocalBranches() {
+     
+     localBranches, err := rc.LocalBranches()
+     if err != nil {
+     	return nil, err
+     }
+     for _, branch := range localBranches {
      	 branchesMap[branch] = struct{}{}
      }
-     for _, branch := range rc.RemoteBranches() {
+
+     remoteBranches, err := rc.RemoteBranches()
+     if err != nil {
+     	return nil, err
+     }
+     for _, branch := range remoteBranches {
      	 branchesMap[branch] = struct{}{}
      }
 
@@ -47,11 +60,15 @@ func (rc RepositoryClone) Branches() []string {
 
      sort.Strings(branches)
 
-     return branches
+     return branches, nil
 }
 
-func (rc RepositoryClone) LocalBranches() []string {
-     listBranches := runCommand("git", "-C", rc.Path(), "branch", "--list")
+func (rc RepositoryClone) LocalBranches() ([]string, error) {
+     listBranches, err := RunCommand("git", "-C", rc.Path(), "branch", "--list")
+     if err != nil {
+     	return nil, err
+     }
+     
      var localBranches []string
      localBranches = strings.Split(listBranches, "\n")
 
@@ -61,23 +78,34 @@ func (rc RepositoryClone) LocalBranches() []string {
      	 localBranches[i] = branch
      }
      
-     return localBranches
+     return localBranches, nil
 }
 
-func (rc RepositoryClone) HasRemoteBranch(branch string) bool {
-     remoteBranches := rc.RemoteBranches()
+func (rc RepositoryClone) HasRemoteBranch(branch string) (bool, error) {
+     remoteBranches, err := rc.RemoteBranches()
+     if err != nil {
+     	return false, err
+     }
      sort.Strings(remoteBranches)
 
      _, found := sort.Find(len(remoteBranches), func(i int) int {
      	return strings.Compare(branch, remoteBranches[i])
      })
 
-     return found
+     return found, nil
 }
 
-func (rc RepositoryClone) RemoteBranches() []string {
-     endpoint := rc.ApiResourcePrefix() + "/branches"
-     response := runCommand("gh", "api", "-H", "Accept:application/vnd.github+json", endpoint)
+func (rc RepositoryClone) RemoteBranches() ([]string, error) {
+     apiResourcePrefix, err := rc.ApiResourcePrefix()
+     if err != nil {
+     	return nil, err
+     }
+     
+     endpoint := apiResourcePrefix + "/branches"
+     response, err := RunCommand("gh", "api", "-H", "Accept:application/vnd.github+json", endpoint)
+     if err != nil {
+     	return nil, err
+     }
 
      var branches []map[string]string
      json.Unmarshal([]byte(response), &branches)
@@ -88,9 +116,52 @@ func (rc RepositoryClone) RemoteBranches() []string {
      	 branchesNames[i] = branch["name"]
      }
 
-     return branchesNames
+     return branchesNames, nil
 }
 
-func (rc RepositoryClone) ApiResourcePrefix() string {
-     return fmt.Sprintf("/repos/%s/%s", rc.RepoOwner(), rc.Name)
+func (rc RepositoryClone) ApiResourcePrefix() (string, error) {
+     repoOwner, err := rc.RepoOwner()
+     if err != nil {
+     	return "", nil
+     }
+     
+     return fmt.Sprintf("/repos/%s/%s", repoOwner, rc.Name), nil
+}
+
+func (rc RepositoryClone) OpenPullRequest(jiraIssueId string,
+					  pullRequestTemplate PullRequestTemplate,
+					  sourceBranch string,
+					  targetBranch string) (string, error) {
+     repoOwner, err := rc.RepoOwner()
+     if err != nil {
+     	return "", nil
+     }
+     endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repoOwner, rc.Name)
+	      
+     response, err := RunCommand("gh", "api",
+     	       "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,
+	       "-f", fmt.Sprintf("title=%s", jiraIssueId),
+	       "-f", fmt.Sprintf("body=%s", pullRequestTemplate.Generate()),
+	       "-f", fmt.Sprintf("head=%s", sourceBranch),
+	       "-f", fmt.Sprintf("base=%s", targetBranch))
+     if err != nil {
+     	type PullRequestError struct {
+ 	     Message string
+	}
+	type PullRequestErrorResponse struct {
+     	     Errors []PullRequestError
+	}
+	var pullRequestErrorResponse PullRequestErrorResponse
+     	json.Unmarshal([]byte(err.Error()), &pullRequestErrorResponse)
+
+	return "", errors.New(pullRequestErrorResponse.Errors[0].Message)
+     }
+
+     return UnmarshallJson(response)["html_url"], nil
+}
+
+func UnmarshallJson(value string) map[string]string {
+     var pr map[string]string
+     json.Unmarshal([]byte(value), &pr)
+     return pr
 }

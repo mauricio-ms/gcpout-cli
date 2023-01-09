@@ -7,6 +7,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"errors"
 	"github.com/fatih/color"
 	"sort"
 	"strings"
@@ -16,7 +17,6 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
-	"encoding/json"
 )
 
 // openPrCmd represents the openPr command
@@ -37,7 +37,11 @@ to quickly create a Cobra application.`,
 		 return
 	      }
 
-	      projectsPath := projectsPath()
+	      projectsPath, err := ProjectsPath()
+	      if err != nil {
+	      	 log.Fatal(err.Error())
+		 return
+	      }
 	      projects := projects(projectsPath + "*")
 
 	      var project string
@@ -51,13 +55,25 @@ to quickly create a Cobra application.`,
 	      		      ParentPath: projectsPath,
 			      Name: project,
 	      }
-	      
+
+	      branches, err := repositoryClone.Branches()
+	      if err != nil {
+	      	 log.Fatal(err.Error())
+		 return
+	      }
+
+	      currentBranch, err := repositoryClone.CurrentBranch()
+	      if err != nil {
+	      	 log.Fatal(err.Error())
+		 return
+	      }
+
 	      var sourceBranch string
 	      survey.AskOne(
 		&survey.Select{
 			Message: "Source Branch:",
-			Options: repositoryClone.Branches(),
-			Default: repositoryClone.CurrentBranch(),
+			Options: branches,
+			Default: currentBranch,
 		}, &sourceBranch, survey.WithValidator(RemoteBranchValidator(repositoryClone)))
 
 	      /**
@@ -71,7 +87,11 @@ to quickly create a Cobra application.`,
 	      **/
 
 	      // TODO create new struct
-	      remoteBranches := repositoryClone.RemoteBranches()
+	      remoteBranches, err := repositoryClone.RemoteBranches()
+	      if err != nil {
+	      	 log.Fatal(err.Error())
+		 return
+	      }
 	      sourceBranchIndex, _ := sort.Find(len(remoteBranches), func(i int) int {
 	      			 return strings.Compare(sourceBranch, remoteBranches[i])
 	      })
@@ -141,17 +161,12 @@ to quickly create a Cobra application.`,
 	      	  pullRequestTemplate.Checklist[i] = checklistAnswer.Index
 	      }
 
-	      endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repositoryClone.RepoOwner(), project)
-	      
-	      openPrCommand := runCommand("gh", "api",
-	      		    "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,
-			    "-f", fmt.Sprintf("title=%s", jiraIssueId),
-			    "-f", fmt.Sprintf("body=%s", pullRequestTemplate.Generate()),
-			    "-f", fmt.Sprintf("head=%s", sourceBranch),
-			    "-f", fmt.Sprintf("base=%s", targetBranch))
-	      var pr map[string]string
-	      json.Unmarshal([]byte(openPrCommand), &pr)
-	      Successf("PR opened: %s\n", pr["html_url"])
+	      link, err := repositoryClone.OpenPullRequest(jiraIssueId, pullRequestTemplate, sourceBranch, targetBranch)
+	      if err != nil {
+	      	 Errorf("X %s\n", err.Error())
+	      } else {
+	      	 Successf("PR opened: %s\n", link)
+	      }
 	},
 }
 
@@ -169,7 +184,17 @@ func Errorf(message string, args ...any) {
 
 func RemoteBranchValidator(rc RepositoryClone) survey.Validator {
      return func (val interface{}) error {
-     	    if answer, ok := val.(core.OptionAnswer) ; !ok || !rc.HasRemoteBranch(answer.Value) {
+     	    answer, ok := val.(core.OptionAnswer)
+	    if !ok {
+	       return fmt.Errorf("Internal error")
+	    }
+
+	    hasRemoteBranch, err := rc.HasRemoteBranch(answer.Value)
+	    if err != nil {
+	       return err
+	    }
+	       
+	    if !hasRemoteBranch {
 	       return fmt.Errorf("%s is only local", answer.Value)
 	    }
 	    return nil
@@ -195,26 +220,31 @@ func projects(projectsPath string) []string {
      return projects
 }
 
-func projectsPath() string {
-     var inner func(relativePath string) string
-     inner = func (relativePath string) string {
+func ProjectsPath() (string, error) {
+     var inner func(relativePath string) (string, error)
+     inner = func (relativePath string) (string, error) {
      	     	  if _, err := os.Stat(relativePath + ".git"); err == nil {
      	       	     return inner(relativePath + "../")
      	     	  }
-     	     	  return runCommand("readlink", "-f", relativePath)
+     	     	  return RunCommand("readlink", "-f", relativePath)
      	     }
-     return inner("") + "/"
+     path, err := inner("")
+     if err != nil {
+     	return "", err
+     }
+     return path + "/", nil
 }
 
-// TODO add behavior to suppress errors only when needed
-func runCommand(name string, arg ...string) string {
+func RunCommand(name string, arg ...string) (string, error) {
       command := exec.Command(name, arg...)
 
       output, err := command.CombinedOutput()
       if err != nil {
-  	 return ""
+      	 errValue := string(output)
+      	 endJsonIdx := strings.LastIndex(errValue, "}")
+  	 return "", errors.New(errValue[0:endJsonIdx+1])
       }
-      return strings.TrimSuffix(string(output), "\n")
+      return strings.TrimSuffix(string(output), "\n"), nil
 }
 
 func init() {
