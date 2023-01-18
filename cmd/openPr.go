@@ -11,11 +11,9 @@ import (
 	"github.com/fatih/color"
 	"sort"
 	"strings"
-	"path/filepath"
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/core"
 	"github.com/spf13/cobra"
-	"os"
 	"os/exec"
 )
 
@@ -37,22 +35,22 @@ This command will generate a description for your PullRequest based on your answ
 		 return
 	      }
 
-	      projectsPath, err := ProjectsPath()
+	      projectsDir, err := ProjectsDir()
 	      if err != nil {
 	      	 log.Fatal(err.Error())
 		 return
 	      }
-	      projects := projects(projectsPath + "*")
+	      gitRepositoriesDir := projectsDir.GitRepositories()
 
 	      var project string
 	      survey.AskOne(
 		&survey.Select{
 			Message: "Project:",
-			Options: projects,
+			Options: gitRepositoriesDir.children,
 		}, &project, survey.WithValidator(survey.Required))
 
 	      repositoryClone := RepositoryClone {
-	      		      ParentPath: projectsPath,
+	      		      ParentPath: gitRepositoriesDir.pwd,
 			      Name: project,
 	      }
 
@@ -208,31 +206,6 @@ func JiraIssueValidator() survey.Validator {
 	    } 
      	    return nil
      }
-}
-
-func projects(projectsPath string) []string {
-     var projectsPaths, _ = filepath.Glob(projectsPath)
-     var projects = make([]string, len(projectsPaths))
-     for i, v := range projectsPaths {
-     	 hierarchy := strings.Split(v, "/")
-	 projects[i] = hierarchy[len(hierarchy)-1]
-     }
-     return projects
-}
-
-func ProjectsPath() (string, error) {
-     var inner func(relativePath string) (string, error)
-     inner = func (relativePath string) (string, error) {
-     	     	  if _, err := os.Stat(relativePath + ".git"); err == nil {
-     	       	     return inner(relativePath + "../")
-     	     	  }
-     	     	  return RunCommand("readlink", "-f", relativePath)
-     	     }
-     path, err := inner("")
-     if err != nil {
-     	return "", err
-     }
-     return path + "/", nil
 }
 
 func RunCommand(name string, arg ...string) (string, error) {
