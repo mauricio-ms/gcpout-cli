@@ -42,11 +42,13 @@ This command will generate a description for your PullRequest based on your answ
 	      }
 	      gitRepositoriesDir := projectsDir.GitRepositories()
 
+	      pwd, _ := Pwd()
 	      var project string
 	      survey.AskOne(
 		&survey.Select{
 			Message: "Project:",
 			Options: gitRepositoriesDir.children,
+			Default: LastPath(pwd),
 		}, &project, survey.WithValidator(survey.Required))
 
 	      repositoryClone := RepositoryClone {

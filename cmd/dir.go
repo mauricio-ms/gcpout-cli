@@ -3,7 +3,6 @@ package cmd
 import (
        "path/filepath"
        "os"
-       "strings"
 )
 
 type Dir struct {
@@ -17,7 +16,7 @@ func ProjectsDir() (*Dir, error) {
      	     	  if IsGitRepository(relativePath) {
      	       	     return inner(relativePath + "../")
      	     	  }
-     	     	  return RunCommand("readlink", "-f", relativePath)
+     	     	  return ReadLink(relativePath)
      	     }
      path, err := inner("")
      if err != nil {
@@ -32,8 +31,7 @@ func Ls(path string) *Dir {
      var pathResults, _ = filepath.Glob(path + "*")
      dir.children = make([]string, len(pathResults))
      for i, v := range pathResults {
-     	 hierarchy := strings.Split(v, "/")
-	 dir.children[i] = hierarchy[len(hierarchy)-1]
+	 dir.children[i] = LastPath(v)
      }
 
      return dir
