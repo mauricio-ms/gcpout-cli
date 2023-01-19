@@ -12,20 +12,52 @@ import (
 type RepositoryClone struct {
      ParentPath	       string
      Name	       string
+     Path	       string
+     RepoOwner	       string
+     ApiResourcePrefix string
+     CurrentBranch     string
+     LocalBranches     []string
+     RemoteBranches    []string
+     Branches	       []string
 }
 
-// TODO Create New method to precompute the methods into fields
+func GetRepositoryClone(parentPath string, name string) (*RepositoryClone, error) {
+     rc := &RepositoryClone {
+     	ParentPath: parentPath,
+	Name: name,
+	Path: parentPath + "/" + name,
+     }
 
-func (rc RepositoryClone) Path() string {
-     return rc.ParentPath + "/" + rc.Name
+     var err error
+     rc.RepoOwner, err = _RepoOwner(rc.Path)
+     if err != nil {
+     	return nil, err
+     }
+
+     rc.ApiResourcePrefix = fmt.Sprintf("/repos/%s/%s", rc.RepoOwner, rc.Name)
+
+     rc.CurrentBranch, err = _CurrentBranch(rc.Path)
+     if err != nil {
+     	return nil, err
+     }
+     
+     rc.LocalBranches, err = _LocalBranches(rc.Path)
+     if err != nil {
+     	return nil, err
+     }
+
+     rc.RemoteBranches, err = _RemoteBranches(rc.ApiResourcePrefix)
+     if err != nil {
+     	return nil, err
+     }
+
+     rc.Branches = _Branches(rc.LocalBranches, rc.RemoteBranches)
+
+     return rc, nil
 }
 
-func (rc RepositoryClone) CurrentBranch() (string, error) {
-     return RunCommand("git", "-C", rc.Path(), "branch", "--show-current")
-}
-
-func (rc RepositoryClone) RepoOwner() (string, error) {
-     originUrl, err := RunCommand("git", "-C", rc.Path(), "remote", "get-url", "origin")
+func _RepoOwner(path string) (string, error) {
+     originUrl, err := RunCommand("git", "-C", path, "remote", "get-url", "origin")
      if err != nil {
      	return "", err
      }
@@ -34,37 +66,8 @@ func (rc RepositoryClone) RepoOwner() (string, error) {
      return ownerRegex.FindStringSubmatch(originUrl)[1], nil
 }
 
-func (rc RepositoryClone) Branches() ([]string, error) {
-     branchesMap := map[string]struct{}{}
-     
-     localBranches, err := rc.LocalBranches()
-     if err != nil {
-     	return nil, err
-     }
-     for _, branch := range localBranches {
-     	 branchesMap[branch] = struct{}{}
-     }
-
-     remoteBranches, err := rc.RemoteBranches()
-     if err != nil {
-     	return nil, err
-     }
-     for _, branch := range remoteBranches {
-     	 branchesMap[branch] = struct{}{}
-     }
-
-     branches := make([]string, 0, len(branchesMap))
-     for branch := range branchesMap {
-     	 branches = append(branches, branch)
-     }
-
-     sort.Strings(branches)
-
-     return branches, nil
-}
-
-func (rc RepositoryClone) LocalBranches() ([]string, error) {
-     listBranches, err := RunCommand("git", "-C", rc.Path(), "branch", "--list")
+func _LocalBranches(path string) ([]string, error) {
+     listBranches, err := RunCommand("git", "-C", path, "branch", "--list")
      if err != nil {
      	return nil, err
      }
@@ -81,26 +84,7 @@ func (rc RepositoryClone) LocalBranches() ([]string, error) {
      return localBranches, nil
 }
 
-func (rc RepositoryClone) HasRemoteBranch(branch string) (bool, error) {
-     remoteBranches, err := rc.RemoteBranches()
-     if err != nil {
-     	return false, err
-     }
-     sort.Strings(remoteBranches)
-
-     _, found := sort.Find(len(remoteBranches), func(i int) int {
-     	return strings.Compare(branch, remoteBranches[i])
-     })
-
-     return found, nil
-}
-
-func (rc RepositoryClone) RemoteBranches() ([]string, error) {
-     apiResourcePrefix, err := rc.ApiResourcePrefix()
-     if err != nil {
-     	return nil, err
-     }
-     
+func _RemoteBranches(apiResourcePrefix string) ([]string, error) {
      endpoint := apiResourcePrefix + "/branches"
      response, err := RunCommand("gh", "api", "-H", "Accept:application/vnd.github+json", endpoint)
      if err != nil {
@@ -111,32 +95,51 @@ func (rc RepositoryClone) RemoteBranches() ([]string, error) {
      json.Unmarshal([]byte(response), &branches)
 
      var branchesNames = make([]string, len(branches))
-     
      for i, branch := range branches {
      	 branchesNames[i] = branch["name"]
      }
+     sort.Strings(branchesNames)
 
      return branchesNames, nil
 }
 
-func (rc RepositoryClone) ApiResourcePrefix() (string, error) {
-     repoOwner, err := rc.RepoOwner()
-     if err != nil {
-     	return "", nil
-     }
+func _Branches(localBranches []string, remoteBranches []string) []string {
+     branchesMap := map[string]struct{}{}
      
-     return fmt.Sprintf("/repos/%s/%s", repoOwner, rc.Name), nil
+     for _, branch := range localBranches {
+     	 branchesMap[branch] = struct{}{}
+     }
+     for _, branch := range remoteBranches {
+     	 branchesMap[branch] = struct{}{}
+     }
+
+     branches := make([]string, 0, len(branchesMap))
+     for branch := range branchesMap {
+     	 branches = append(branches, branch)
+     }
+
+     sort.Strings(branches)
+
+     return branches
+}
+
+func _CurrentBranch(path string) (string, error) {
+     return RunCommand("git", "-C", path, "branch", "--show-current")
+}
+
+func (rc RepositoryClone) HasRemoteBranch(branch string) (bool, error) {
+     _, found := sort.Find(len(rc.RemoteBranches), func(i int) int {
+     	return strings.Compare(branch, rc.RemoteBranches[i])
+     })
+
+     return found, nil
 }
 
 func (rc RepositoryClone) OpenPullRequest(jiraIssueId string,
 					  pullRequestTemplate PullRequestTemplate,
 					  sourceBranch string,
 					  targetBranch string) (string, error) {
-     repoOwner, err := rc.RepoOwner()
-     if err != nil {
-     	return "", nil
-     }
-     endpoint := fmt.Sprintf("/repos/%s/%s/pulls", repoOwner, rc.Name)
+     endpoint := fmt.Sprintf("/repos/%s/%s/pulls", rc.RepoOwner, rc.Name)
 	      
      response, err := RunCommand("gh", "api",
      	       "--method", "POST", "-H", "Accept:application/vnd.github+json", endpoint,

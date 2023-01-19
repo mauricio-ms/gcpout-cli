@@ -51,29 +51,18 @@ This command will generate a description for your PullRequest based on your answ
 			Default: LastPath(pwd),
 		}, &project, survey.WithValidator(survey.Required))
 
-	      repositoryClone := RepositoryClone {
-	      		      ParentPath: gitRepositoriesDir.pwd,
-			      Name: project,
-	      }
-
-	      branches, err := repositoryClone.Branches()
+	      repositoryClone, err := GetRepositoryClone(gitRepositoriesDir.pwd, project)
 	      if err != nil {
 	      	 log.Fatal(err.Error())
 		 return
 	      }
-
-	      currentBranch, err := repositoryClone.CurrentBranch()
-	      if err != nil {
-	      	 log.Fatal(err.Error())
-		 return
-	      }
-
+	 
 	      var sourceBranch string
 	      survey.AskOne(
 		&survey.Select{
 			Message: "Source Branch:",
-			Options: branches,
-			Default: currentBranch,
+			Options: repositoryClone.Branches,
+			Default: repositoryClone.CurrentBranch,
 		}, &sourceBranch, survey.WithValidator(RemoteBranchValidator(repositoryClone)))
 
 	      /**
@@ -87,11 +76,7 @@ This command will generate a description for your PullRequest based on your answ
 	      **/
 
 	      // TODO create new struct
-	      remoteBranches, err := repositoryClone.RemoteBranches()
-	      if err != nil {
-	      	 log.Fatal(err.Error())
-		 return
-	      }
+	      remoteBranches := repositoryClone.RemoteBranches
 	      sourceBranchIndex, _ := sort.Find(len(remoteBranches), func(i int) int {
 	      			 return strings.Compare(sourceBranch, remoteBranches[i])
 	      })
@@ -182,7 +167,7 @@ func Errorf(message string, args ...any) {
      color.New(color.FgRed).Printf(message, args...)
 }
 
-func RemoteBranchValidator(rc RepositoryClone) survey.Validator {
+func RemoteBranchValidator(rc *RepositoryClone) survey.Validator {
      return func (val interface{}) error {
      	    answer, ok := val.(core.OptionAnswer)
 	    if !ok {
