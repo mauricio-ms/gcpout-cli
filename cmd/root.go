@@ -16,12 +16,12 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "gcpout-cli",
 	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Long: `In case of fire:
+~$ git commit
+~$ git push
+~$ git out
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+Inspired by a nerd joke, this tool was created to allow us developers to open our PRs more easily, without leaving our terminals, opening Jira tickets on the WEB, writing title, descriptions, filling in the checklist boxes. Now, you can do all this in your terminal.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
